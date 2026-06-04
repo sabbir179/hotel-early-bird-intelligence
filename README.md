@@ -1,44 +1,88 @@
 # Hotel Early Bird Intelligence
 
-A Python project skeleton for ingesting daily hotel KPI Excel files, combining them into a historical SQLite database, and later building dashboard and report capabilities.
+A local-first analytics dashboard for combining daily hotel Early Bird Excel reports into a historical KPI database, dashboard, validation report, and PowerPoint summary.
 
-## Project Goal
+## Problem statement
 
-- Collect daily hotel KPI files named like `Waterloo Early Bird DD.MM.YY.xlsx`
-- Store historical metrics in a SQLite database
-- Provide a foundation for a Streamlit dashboard and PowerPoint/PDF report generator
+Daily Early Bird reports are delivered as individual Excel files. Management can review one day at a time, but there is no easy way to view historical performance or compare consecutive reports.
 
-## Structure
+## Solution
 
-- `app/` - core application modules
-  - `config.py` - application settings and configuration
-  - `extractor.py` - placeholder for Excel extraction logic
-  - `database.py` - placeholder for SQLite database management
-  - `validation.py` - placeholder for data validation rules
-  - `analytics.py` - placeholder for KPI analytics functions
-  - `report_generator.py` - placeholder for report generation logic
-- `dashboard/` - dashboard application entrypoint
-  - `streamlit_app.py` - Streamlit dashboard starter
-- `data/` - data directories
-  - `raw/` - raw daily Excel files
-  - `processed/` - processed datasets
-  - `database/` - SQLite database file
+This app combines multiple Excel files into a single master dataset and exposes the results through a Streamlit dashboard. It supports data validation, archive storage in SQLite, and PowerPoint summary generation for management review.
+
+## Features
+
+- Upload Early Bird Excel files through the dashboard
+- Read Excel files from a configurable folder path
+- Extract daily KPIs from each report
+- Build a master CSV dataset
+- Build a SQLite database for historical analysis
+- Validate data quality and report warning/failure counts
+- Streamlit dashboard with charts and KPI cards
+- Management summary section for quick insights
+- PowerPoint report generation and download
+- Pytest tests for core functionality
+
+## Data privacy
+
+- Raw Excel files are not committed to GitHub
+- Processed CSV files are not committed
+- SQLite database files are not committed
+- Generated reports are not committed
+- The app is designed to run locally so data stays under user control
+
+## Project structure
+
+- `app/` - core application logic
+- `dashboard/` - Streamlit user interface
+- `data/` - local data storage
+  - `raw/` - raw Excel source files
+  - `processed/` - generated CSV outputs
+  - `database/` - SQLite database files
 - `reports/` - generated report outputs
   - `powerpoint/`
   - `pdf/`
-- `tests/` - tests and validation utilities
+- `tests/` - automated tests
 
-## Python Requirements
+## Setup
 
-- Python 3.11+
-- pandas
-- openpyxl
-- streamlit
-- plotly
-- python-pptx
-- pydantic
-- pytest
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-## Usage
+## Run pipeline
 
-This is an initial skeleton. Extraction, database ingestion, analytics, and report generation are not yet implemented.
+```bash
+python -m app.extractor
+```
+
+## Run dashboard
+
+```bash
+streamlit run dashboard/streamlit_app.py
+```
+
+## Run tests
+
+```bash
+python -m pytest
+```
+
+## GitHub safety note
+
+This repository uses `.gitignore` to protect sensitive local data and report files. The following directories are intended to stay local and not be committed:
+
+- `data/raw`
+- `data/processed`
+- `data/database`
+- `reports`
+
+## Roadmap
+
+- Better UI design and dashboard polish
+- PDF export support
+- Optional AI-generated executive summary using aggregated KPI data only
+- Scheduled refresh for recurring ingestion
+- Authentication for production deployment
