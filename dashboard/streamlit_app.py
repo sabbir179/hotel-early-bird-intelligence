@@ -119,6 +119,85 @@ def main() -> None:
     adr_display = format_currency(latest.get("daily_average_rate"))
     col5.metric("Latest ADR", adr_display)
 
+    # Management Summary
+    st.subheader("Management Summary")
+    
+    latest_row = df.loc[df["business_date"] == df["business_date"].max()].tail(1)
+    if not latest_row.empty:
+        latest_summary = latest_row.iloc[0]
+        
+        # Build summary items
+        summary_items = []
+        
+        # Latest values
+        latest_date = latest_summary.get("business_date")
+        latest_date_str = latest_date.strftime("%Y-%m-%d") if pd.notna(latest_date) else "-"
+        summary_items.append(f"Latest business date: {latest_date_str}")
+        
+        latest_rooms = int(latest_summary.get("daily_rooms_sold")) if pd.notna(latest_summary.get("daily_rooms_sold")) else "-"
+        summary_items.append(f"Latest rooms sold: {latest_rooms}")
+        
+        latest_occ = latest_summary.get("daily_occupancy_pct") if "daily_occupancy_pct" in latest_summary.index else None
+        latest_occ_str = format_percent(latest_occ) if latest_occ is not None and pd.notna(latest_occ) else "-"
+        summary_items.append(f"Latest occupancy: {latest_occ_str}")
+        
+        latest_adr = latest_summary.get("daily_average_rate")
+        latest_adr_str = format_currency(latest_adr) if pd.notna(latest_adr) else "-"
+        summary_items.append(f"Latest ADR: {latest_adr_str}")
+        
+        latest_rev = latest_summary.get("revenue_mtd_total_revenue")
+        latest_rev_str = format_currency(latest_rev) if pd.notna(latest_rev) else "-"
+        summary_items.append(f"Latest total revenue: {latest_rev_str}")
+        
+        # Compare with previous report if available
+        if len(df) > 1:
+            # Get previous row (second most recent business_date)
+            prev_date = df["business_date"].nlargest(2).iloc[-1]
+            prev_row = df.loc[df["business_date"] == prev_date].tail(1)
+            if not prev_row.empty:
+                prev = prev_row.iloc[0]
+                
+                # Rooms sold change
+                prev_rooms = prev.get("daily_rooms_sold")
+                curr_rooms = latest_summary.get("daily_rooms_sold")
+                if pd.notna(prev_rooms) and pd.notna(curr_rooms):
+                    rooms_change = int(curr_rooms) - int(prev_rooms)
+                    rooms_change_str = f"+{rooms_change}" if rooms_change > 0 else str(rooms_change)
+                    summary_items.append(f"Rooms sold change vs previous: {rooms_change_str}")
+                
+                # Occupancy change (in percentage points)
+                prev_occ = prev.get("daily_occupancy_pct") if "daily_occupancy_pct" in prev.index else None
+                if latest_occ is not None and pd.notna(latest_occ) and prev_occ is not None and pd.notna(prev_occ):
+                    occ_change = latest_occ - prev_occ
+                    occ_change_str = f"+{occ_change:.1f}" if occ_change > 0 else f"{occ_change:.1f}"
+                    summary_items.append(f"Occupancy change vs previous: {occ_change_str} percentage points")
+                
+                # ADR change
+                prev_adr = prev.get("daily_average_rate")
+                if pd.notna(prev_adr) and pd.notna(latest_adr):
+                    adr_change = latest_adr - prev_adr
+                    adr_change_str = f"+£{adr_change:.2f}" if adr_change > 0 else f"£{adr_change:.2f}"
+                    summary_items.append(f"ADR change vs previous: {adr_change_str}")
+        else:
+            summary_items.append("No previous report available for comparison")
+        
+        # Validation status summary
+        val_path = Path("data") / "processed" / "early_bird_validation.csv"
+        if val_path.exists():
+            vdf = pd.read_csv(val_path)
+            fail_count = len(vdf[vdf["status"] == "FAIL"])
+            warn_count = len(vdf[vdf["status"] == "WARN"])
+            if fail_count == 0 and warn_count == 0:
+                summary_items.append("Validation status: ✅ All checks passed")
+            else:
+                summary_items.append(f"Validation status: ⚠️ {fail_count} failures, {warn_count} warnings")
+        
+        # Display as bullet points
+        for item in summary_items:
+            st.markdown(f"• {item}")
+    else:
+        st.write("No data available for summary")
+
     # Latest report table (friendly labels)
     st.subheader("Latest report details")
     latest_row = df.loc[df["business_date"] == df["business_date"].max()].tail(1)
