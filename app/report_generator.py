@@ -42,7 +42,15 @@ def generate_powerpoint_report(
     """
     if df is None or df.empty:
         raise ValueError("DataFrame is empty or None")
-    
+
+    df = df.copy()
+    df["business_date"] = pd.to_datetime(df["business_date"], errors="coerce")
+    df = df.sort_values("business_date").reset_index(drop=True)
+    df = df[df["business_date"].notna()].reset_index(drop=True)
+
+    if df.empty:
+        raise ValueError("DataFrame has no valid business_date values")
+
     # Get latest row
     latest = df.iloc[-1]
     latest_date = latest.get("business_date")
@@ -50,10 +58,7 @@ def generate_powerpoint_report(
     if pd.isna(latest_date):
         latest_date_str = "Unknown"
     else:
-        if not isinstance(latest_date, str):
-            latest_date_str = pd.Timestamp(latest_date).strftime("%Y-%m-%d")
-        else:
-            latest_date_str = latest_date
+        latest_date_str = pd.Timestamp(latest_date).strftime("%Y-%m-%d")
     
     # Determine output path
     if output_path is None:
@@ -233,32 +238,29 @@ def _add_management_summary_slide(prs: Presentation, df: pd.DataFrame, latest_ro
     
     # Compare with previous report if available
     if len(df) > 1:
-        prev_date = df["business_date"].nlargest(2).iloc[-1]
-        prev_row = df.loc[df["business_date"] == prev_date].tail(1)
-        if not prev_row.empty:
-            prev = prev_row.iloc[0]
-            
-            # Rooms sold change
-            prev_rooms = prev.get("daily_rooms_sold")
-            curr_rooms = latest_row.get("daily_rooms_sold")
-            if pd.notna(prev_rooms) and pd.notna(curr_rooms):
-                rooms_change = int(curr_rooms) - int(prev_rooms)
-                rooms_change_str = f"+{rooms_change}" if rooms_change > 0 else str(rooms_change)
-                summary_items.append(f"Rooms sold change: {rooms_change_str}")
-            
-            # Occupancy change
-            prev_occ = prev.get("daily_occupancy_pct") if "daily_occupancy_pct" in prev.index else None
-            if latest_occ is not None and pd.notna(latest_occ) and prev_occ is not None and pd.notna(prev_occ):
-                occ_change = latest_occ - prev_occ
-                occ_change_str = f"+{occ_change:.1f}" if occ_change > 0 else f"{occ_change:.1f}"
-                summary_items.append(f"Occupancy change: {occ_change_str} pp")
-            
-            # ADR change
-            prev_adr = prev.get("daily_average_rate")
-            if pd.notna(prev_adr) and pd.notna(latest_adr):
-                adr_change = latest_adr - prev_adr
-                adr_change_str = f"+£{adr_change:.2f}" if adr_change > 0 else f"£{adr_change:.2f}"
-                summary_items.append(f"ADR change: {adr_change_str}")
+        prev = df.iloc[-2]
+        
+        # Rooms sold change
+        prev_rooms = prev.get("daily_rooms_sold")
+        curr_rooms = latest_row.get("daily_rooms_sold")
+        if pd.notna(prev_rooms) and pd.notna(curr_rooms):
+            rooms_change = int(curr_rooms) - int(prev_rooms)
+            rooms_change_str = f"+{rooms_change}" if rooms_change > 0 else str(rooms_change)
+            summary_items.append(f"Rooms sold change: {rooms_change_str}")
+        
+        # Occupancy change
+        prev_occ = prev.get("daily_occupancy_pct") if "daily_occupancy_pct" in prev.index else None
+        if latest_occ is not None and pd.notna(latest_occ) and prev_occ is not None and pd.notna(prev_occ):
+            occ_change = latest_occ - prev_occ
+            occ_change_str = f"+{occ_change:.1f}" if occ_change > 0 else f"{occ_change:.1f}"
+            summary_items.append(f"Occupancy change: {occ_change_str} pp")
+        
+        # ADR change
+        prev_adr = prev.get("daily_average_rate")
+        if pd.notna(prev_adr) and pd.notna(latest_adr):
+            adr_change = latest_adr - prev_adr
+            adr_change_str = f"+£{adr_change:.2f}" if adr_change > 0 else f"£{adr_change:.2f}"
+            summary_items.append(f"ADR change: {adr_change_str}")
     else:
         summary_items.append("No previous report available for comparison")
     
