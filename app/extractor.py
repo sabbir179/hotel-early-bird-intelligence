@@ -240,6 +240,69 @@ def get_cell_value(ws, cell_ref: str):
 
     return cell.value
 
+
+def find_text_value_to_right(ws, label_text: str, max_scan_columns: int = 10):
+    """Find text value to the right of a label cell.
+
+    Locates a label by exact normalized text anywhere in the worksheet and
+    returns the first non-empty value found to the right.
+    """
+    target = normalize_text(label_text)
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
+        for cell in row:
+            if normalize_text(cell.value) != target:
+                continue
+
+            for offset in range(1, max_scan_columns + 1):
+                scan_col = cell.column + offset
+                if scan_col > ws.max_column:
+                    break
+                candidate = ws.cell(row=cell.row, column=scan_col)
+                if candidate.value is None:
+                    continue
+                if normalize_text(candidate.value) == "":
+                    continue
+                return candidate.value
+            return None
+    return None
+
+
+def find_text_value_near_label(ws, label_text: str, max_scan_columns: int = 10, max_scan_rows: int = 5):
+    """Find a text value near a label cell, scanning right then below."""
+    target = normalize_text(label_text)
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
+        for cell in row:
+            if normalize_text(cell.value) != target:
+                continue
+
+            # Try right first
+            for offset in range(1, max_scan_columns + 1):
+                scan_col = cell.column + offset
+                if scan_col > ws.max_column:
+                    break
+                candidate = ws.cell(row=cell.row, column=scan_col)
+                if candidate.value is None:
+                    continue
+                if normalize_text(candidate.value) == "":
+                    continue
+                return candidate.value
+
+            # Try below in the same column
+            for offset in range(1, max_scan_rows + 1):
+                scan_row = cell.row + offset
+                if scan_row > ws.max_row:
+                    break
+                candidate = ws.cell(row=scan_row, column=cell.column)
+                if candidate.value is None:
+                    continue
+                if normalize_text(candidate.value) == "":
+                    continue
+                return candidate.value
+
+            return None
+    return None
+
+
 def extract_report_kpis(file_path: Union[str, Path]) -> Dict[str, Optional[object]]:
     """Extract a clean KPI dictionary from the Report sheet for a file.
 
@@ -303,6 +366,29 @@ def extract_report_kpis(file_path: Union[str, Path]) -> Dict[str, Optional[objec
     result["revenue_stats_rooms_revenue"] = rev_rooms if rev_rooms is not None else get_cell_value(ws, "B27")
     result["revenue_stats_other_rooms_rev"] = rev_other_rooms if rev_other_rooms is not None else get_cell_value(ws, "B28")
     result["revenue_stats_tel_internet_movies"] = rev_tel if rev_tel is not None else get_cell_value(ws, "B30")
+
+    # Duty Manager / DM names, if present in the report
+    result["early_dm_name"] = None
+    result["late_dm_name"] = None
+    result["night_dm_name"] = None
+
+    for field_label, key in [
+        ("Early DM", "early_dm_name"),
+        ("Late DM", "late_dm_name"),
+        ("Night DM", "night_dm_name"),
+    ]:
+        dm_value = find_text_value_near_label(ws, field_label)
+        result[key] = str(dm_value).strip() if dm_value is not None else None
+
+    # Backward-compatible general DM field if a single duty manager label exists
+    dm_name = result["early_dm_name"] or result["late_dm_name"] or result["night_dm_name"]
+    if dm_name is None:
+        dm_name = find_text_value_near_label(ws, "Duty Manager")
+    if dm_name is None:
+        dm_name = find_text_value_near_label(ws, "DM")
+    if dm_name is None:
+        dm_name = find_text_value_near_label(ws, "DM Name")
+    result["dm_name"] = str(dm_name).strip() if dm_name is not None else None
 
     return result
 

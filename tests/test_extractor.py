@@ -29,5 +29,8 @@ def test_extract_report_kpis_basic():
         "daily_occupancy",
         "daily_average_rate",
         "revenue_mtd_total_revenue",
+        "early_dm_name",
+        "late_dm_name",
+        "night_dm_name",
     ]:
         assert key in result

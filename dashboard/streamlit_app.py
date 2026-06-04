@@ -29,11 +29,82 @@ def format_percent(v, decimals: int = 1):
         return "-"
 
 
+def format_delta(value, prefix: str = "", suffix: str = "", decimals: int = 1):
+    try:
+        delta = float(value)
+    except Exception:
+        return "-"
+
+    if delta > 0:
+        return f"▲ {prefix}{abs(delta):.{decimals}f}{suffix}"
+    if delta < 0:
+        return f"▼ {prefix}{abs(delta):.{decimals}f}{suffix}"
+    return f"– {prefix}{abs(delta):.{decimals}f}{suffix}"
+
+
+def format_delta_html(value, prefix: str = "", suffix: str = "", invert: bool = False, decimals: int = 1):
+    try:
+        delta = float(value)
+    except Exception:
+        return "-"
+
+    if invert:
+        delta = -delta
+
+    if delta > 0:
+        return f"<span class='delta-positive'>▲ {prefix}{abs(delta):.{decimals}f}{suffix}</span>"
+    if delta < 0:
+        return f"<span class='delta-negative'>▼ {prefix}{abs(delta):.{decimals}f}{suffix}</span>"
+    return f"<span class='delta-neutral'>– {prefix}{abs(delta):.{decimals}f}{suffix}</span>"
+
+
+def format_card_value(value):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "-"
+    return str(value)
+
+
 def main() -> None:
     st.set_page_config(page_title="Hotel Early Bird Intelligence", layout="wide")
 
-    st.title("Hotel Early Bird Intelligence")
-    st.write("Historical KPI view from daily Early Bird Excel reports.")
+    st.markdown(
+        """
+        <style>
+            .page-title h1 { margin: 0; color: #0f172a; font-size: 2.6rem; }
+            .page-title p { margin: 0.4rem 0 1.6rem; color: #475569; font-size: 1.05rem; }
+            .page-note { color: #64748b; margin-bottom: 24px; }
+            .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+            .kpi-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 20px 18px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05); }
+            .kpi-label { color: #64748b; font-size: 0.90rem; margin-bottom: 8px; }
+            .kpi-value { color: #0f172a; font-size: 1.6rem; font-weight: 700; }
+            .section-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); margin-bottom: 24px; }
+            .section-title { color: #0f172a; font-size: 1.3rem; font-weight: 700; margin-bottom: 16px; }
+            .bullet-list { padding-left: 20px; color: #334155; }
+            .bullet-list li { margin-bottom: 10px; line-height: 1.6; }
+            .status-badge { display: inline-flex; align-items: center; margin-bottom: 12px; padding: 8px 14px; border-radius: 999px; font-size: 0.95rem; font-weight: 600; }
+            .status-success { background: #ecfdf5; color: #0f766e; }
+            .status-warning { background: #ffedd5; color: #92400e; }
+            .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+            .summary-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 20px; }
+            .summary-card-title { color: #0f172a; font-size: 1rem; font-weight: 700; margin-bottom: 12px; }
+            .summary-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 0.95rem; }
+            .summary-label { color: #475569; }
+            .summary-value { color: #0f172a; font-weight: 700; }
+            .delta-positive { color: #16a34a; font-weight: 700; }
+            .delta-negative { color: #dc2626; font-weight: 700; }
+            .delta-neutral { color: #475569; font-weight: 700; }
+            .sidebar hr { margin: 18px 0; }
+            .sidebar .stTextInput > div, .sidebar .stButton > button { width: 100%; }
+            .sidebar .stButton > button { margin-top: 10px; }
+        </style>
+        <div class="page-title">
+            <h1>Hotel Early Bird Intelligence</h1>
+            <p>Historical KPI view from daily Early Bird Excel reports.</p>
+        </div>
+        <div class="page-note">Use the sidebar to upload files, select a source folder, refresh the dataset, or generate a PowerPoint report.</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Sidebar data controls
     with st.sidebar:
@@ -139,172 +210,230 @@ def main() -> None:
     if "daily_occupancy" in df.columns:
         df["daily_occupancy_pct"] = pd.to_numeric(df["daily_occupancy"], errors="coerce") * 100
 
-    # Header
-    st.header("Hotel Early Bird Intelligence Dashboard")
-    st.markdown("_Historical KPI view from daily Early Bird Excel reports._")
-
-    # KPI cards
     latest = df.iloc[-1]
     total_reports = len(df)
-    date_min = df['business_date'].min()
-    date_max = df['business_date'].max()
-    date_range_display = f"Date range: {date_min.strftime('%Y-%m-%d')} → {date_max.strftime('%Y-%m-%d')}"
+    date_min = df["business_date"].min()
+    date_max = df["business_date"].max()
+    date_range_display = f"{date_min.strftime('%Y-%m-%d')} → {date_max.strftime('%Y-%m-%d')}"
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Total reports", total_reports)
-    # Use markdown for date range to avoid truncation issues with st.metric
-    col2.markdown(date_range_display)
-    col3.metric("Latest rooms sold", latest.get("daily_rooms_sold", "-"))
+    latest_rooms = int(latest.get("daily_rooms_sold")) if pd.notna(latest.get("daily_rooms_sold")) else "-"
+    latest_occ = latest.get("daily_occupancy_pct") if "daily_occupancy_pct" in latest.index else None
+    latest_occ_display = format_percent(latest_occ) if latest_occ is not None and pd.notna(latest_occ) else "-"
+    latest_adr_display = format_currency(latest.get("daily_average_rate"))
+    latest_total_revenue = format_currency(latest.get("revenue_mtd_total_revenue"))
 
-    occ = latest.get("daily_occupancy_pct") if "daily_occupancy_pct" in latest.index else None
-    occ_display = format_percent(occ) if occ is not None and pd.notna(occ) else "-"
-    col4.metric("Latest occupancy", occ_display)
+    latest_early_dm = latest.get("early_dm_name") if "early_dm_name" in latest.index else None
+    latest_late_dm = latest.get("late_dm_name") if "late_dm_name" in latest.index else None
+    latest_night_dm = latest.get("night_dm_name") if "night_dm_name" in latest.index else None
+    early_dm_display = format_card_value(latest_early_dm)
+    late_dm_display = format_card_value(latest_late_dm)
+    night_dm_display = format_card_value(latest_night_dm)
 
-    adr_display = format_currency(latest.get("daily_average_rate"))
-    col5.metric("Latest ADR", adr_display)
+    previous_row = df.iloc[-2] if len(df) > 1 else None
+    rooms_change = None
+    occupancy_change = None
+    adr_change = None
+    revenue_change = None
+    if previous_row is not None:
+        prev_rooms = previous_row.get("daily_rooms_sold")
+        if pd.notna(prev_rooms) and pd.notna(latest.get("daily_rooms_sold")):
+            rooms_change = int(latest.get("daily_rooms_sold")) - int(prev_rooms)
 
-    # Management Summary
-    st.subheader("Management Summary")
-    
-    latest_row = df.loc[df["business_date"] == df["business_date"].max()].tail(1)
-    if not latest_row.empty:
-        latest_summary = latest_row.iloc[0]
-        
-        # Build summary items
-        summary_items = []
-        
-        # Latest values
-        latest_date = latest_summary.get("business_date")
-        latest_date_str = latest_date.strftime("%Y-%m-%d") if pd.notna(latest_date) else "-"
-        summary_items.append(f"Latest business date: {latest_date_str}")
-        
-        latest_rooms = int(latest_summary.get("daily_rooms_sold")) if pd.notna(latest_summary.get("daily_rooms_sold")) else "-"
-        summary_items.append(f"Latest rooms sold: {latest_rooms}")
-        
-        latest_occ = latest_summary.get("daily_occupancy_pct") if "daily_occupancy_pct" in latest_summary.index else None
-        latest_occ_str = format_percent(latest_occ) if latest_occ is not None and pd.notna(latest_occ) else "-"
-        summary_items.append(f"Latest occupancy: {latest_occ_str}")
-        
-        latest_adr = latest_summary.get("daily_average_rate")
-        latest_adr_str = format_currency(latest_adr) if pd.notna(latest_adr) else "-"
-        summary_items.append(f"Latest ADR: {latest_adr_str}")
-        
-        latest_rev = latest_summary.get("revenue_mtd_total_revenue")
-        latest_rev_str = format_currency(latest_rev) if pd.notna(latest_rev) else "-"
-        summary_items.append(f"Latest total revenue: {latest_rev_str}")
-        
-        # Compare with previous report if available
-        if len(df) > 1:
-            # Get previous row (second most recent business_date)
-            prev_date = df["business_date"].nlargest(2).iloc[-1]
-            prev_row = df.loc[df["business_date"] == prev_date].tail(1)
-            if not prev_row.empty:
-                prev = prev_row.iloc[0]
-                
-                # Rooms sold change
-                prev_rooms = prev.get("daily_rooms_sold")
-                curr_rooms = latest_summary.get("daily_rooms_sold")
-                if pd.notna(prev_rooms) and pd.notna(curr_rooms):
-                    rooms_change = int(curr_rooms) - int(prev_rooms)
-                    rooms_change_str = f"+{rooms_change}" if rooms_change > 0 else str(rooms_change)
-                    summary_items.append(f"Rooms sold change vs previous: {rooms_change_str}")
-                
-                # Occupancy change (in percentage points)
-                prev_occ = prev.get("daily_occupancy_pct") if "daily_occupancy_pct" in prev.index else None
-                if latest_occ is not None and pd.notna(latest_occ) and prev_occ is not None and pd.notna(prev_occ):
-                    occ_change = latest_occ - prev_occ
-                    occ_change_str = f"+{occ_change:.1f}" if occ_change > 0 else f"{occ_change:.1f}"
-                    summary_items.append(f"Occupancy change vs previous: {occ_change_str} percentage points")
-                
-                # ADR change
-                prev_adr = prev.get("daily_average_rate")
-                if pd.notna(prev_adr) and pd.notna(latest_adr):
-                    adr_change = latest_adr - prev_adr
-                    adr_change_str = f"+£{adr_change:.2f}" if adr_change > 0 else f"£{adr_change:.2f}"
-                    summary_items.append(f"ADR change vs previous: {adr_change_str}")
-        else:
-            summary_items.append("No previous report available for comparison")
-        
-        # Validation status summary
-        val_path = Path("data") / "processed" / "early_bird_validation.csv"
-        if val_path.exists():
-            vdf = pd.read_csv(val_path)
-            fail_count = len(vdf[vdf["status"] == "FAIL"])
-            warn_count = len(vdf[vdf["status"] == "WARN"])
-            if fail_count == 0 and warn_count == 0:
-                summary_items.append("Validation status: ✅ All checks passed")
-            else:
-                summary_items.append(f"Validation status: ⚠️ {fail_count} failures, {warn_count} warnings")
-        
-        # Display as bullet points
-        for item in summary_items:
-            st.markdown(f"• {item}")
-    else:
-        st.write("No data available for summary")
+        prev_occ = previous_row.get("daily_occupancy_pct") if "daily_occupancy_pct" in previous_row.index else None
+        if latest_occ is not None and pd.notna(latest_occ) and prev_occ is not None and pd.notna(prev_occ):
+            occupancy_change = latest_occ - prev_occ
 
-    # Latest report table (friendly labels)
-    st.subheader("Latest report details")
-    latest_row = df.loc[df["business_date"] == df["business_date"].max()].tail(1)
-    if not latest_row.empty:
-        row = latest_row.iloc[0]
-        friendly = {
-            "Business Date": row.get("business_date").strftime("%Y-%m-%d") if pd.notna(row.get("business_date")) else "-",
-            "Rooms Sold": int(row.get("daily_rooms_sold")) if pd.notna(row.get("daily_rooms_sold")) else "-",
-            "Occupancy %": format_percent(row.get("daily_occupancy") * 100) if pd.notna(row.get("daily_occupancy")) else "-",
-            "ADR £": format_currency(row.get("daily_average_rate")),
-            "Total Revenue £": format_currency(row.get("revenue_mtd_total_revenue")),
-            "Rooms Revenue £": format_currency(row.get("revenue_stats_rooms_revenue")),
-            "Bar Revenue £": format_currency(row.get("revenue_mtd_bar")),
-        }
-        st.table(pd.DataFrame([friendly]))
-    else:
-        st.write("No latest report available")
+        prev_adr = previous_row.get("daily_average_rate")
+        if pd.notna(prev_adr) and pd.notna(latest.get("daily_average_rate")):
+            adr_change = latest.get("daily_average_rate") - prev_adr
 
-    # Trend charts
-    st.subheader("Trends")
-    charts_col1, charts_col2 = st.columns(2)
+        prev_rev = previous_row.get("revenue_mtd_total_revenue")
+        if pd.notna(prev_rev) and pd.notna(latest.get("revenue_mtd_total_revenue")):
+            revenue_change = latest.get("revenue_mtd_total_revenue") - prev_rev
 
-    if "daily_rooms_sold" in df.columns:
-        fig_rooms = px.line(df, x="business_date", y="daily_rooms_sold", title="Daily Rooms Sold")
-        fig_rooms.update_layout(yaxis_title="Rooms Sold")
-        charts_col1.plotly_chart(fig_rooms, use_container_width=True)
-
-    if "daily_occupancy_pct" in df.columns:
-        fig_occ = px.line(df, x="business_date", y="daily_occupancy_pct", title="Daily Occupancy")
-        fig_occ.update_layout(yaxis_title="Occupancy (%)")
-        charts_col1.plotly_chart(fig_occ, use_container_width=True)
-
-    if "daily_average_rate" in df.columns:
-        fig_adr = px.line(df, x="business_date", y="daily_average_rate", title="Daily Average Rate")
-        fig_adr.update_layout(yaxis_title="ADR (£)")
-        charts_col2.plotly_chart(fig_adr, use_container_width=True)
-
-    if "revenue_mtd_total_revenue" in df.columns:
-        fig_rev = px.line(df, x="business_date", y="revenue_mtd_total_revenue", title="MTD Total Revenue")
-        fig_rev.update_layout(yaxis_title="Revenue (£)")
-        charts_col2.plotly_chart(fig_rev, use_container_width=True)
-
-    # Data Validation section
-    st.subheader("Data Validation")
     val_path = Path("data") / "processed" / "early_bird_validation.csv"
+    validation_counts = None
+    pass_count = 0
+    validation_status_text = "No validation data"
+    fail_count = 0
+    warn_count = 0
     if val_path.exists():
         vdf = pd.read_csv(val_path)
-        status_counts = vdf["status"].value_counts().to_dict()
-        st.write("Validation status counts:")
-        st.write(status_counts)
-
-        problems = vdf[vdf["status"].isin(["WARN", "FAIL"])]
-        if not problems.empty:
-            st.markdown("**Warnings and Failures:**")
-            st.dataframe(problems[["business_date", "file_name", "check_name", "status", "message"]])
+        validation_counts = vdf["status"].value_counts().to_dict()
+        fail_count = int(validation_counts.get("FAIL", 0))
+        warn_count = int(validation_counts.get("WARN", 0))
+        pass_count = int(validation_counts.get("PASS", 0))
+        if fail_count == 0 and warn_count == 0:
+            validation_status_text = "All checks passed"
         else:
-            st.success("No WARN or FAIL validations found.")
-    else:
-        st.info("Validation file not found. Run `python -m app.extractor` to produce validation results.")
+            validation_status_text = f"{fail_count} failures, {warn_count} warnings"
 
-    # Full data table
-    st.subheader("Full data")
-    st.dataframe(df)
+    overview_tab, trends_tab, validation_tab, data_tab = st.tabs([
+        "Overview",
+        "Trends",
+        "Validation",
+        "Data",
+    ])
+
+    with overview_tab:
+        st.markdown(
+            f"""
+            <div class="kpi-row">
+                <div class="kpi-card">
+                    <div class="kpi-label">Total reports</div>
+                    <div class="kpi-value">{total_reports}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Date range</div>
+                    <div class="kpi-value">{date_range_display}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Duty Managers</div>
+                    <div class="kpi-value">Early: {early_dm_display}<br>Late: {late_dm_display}<br>Night: {night_dm_display}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Latest rooms sold</div>
+                    <div class="kpi-value">{latest_rooms}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Latest occupancy</div>
+                    <div class="kpi-value">{latest_occ_display}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Latest ADR</div>
+                    <div class="kpi-value">{latest_adr_display}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Latest total revenue</div>
+                    <div class="kpi-value">{latest_total_revenue}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        operations_items = [
+            ("📅 Business date", latest.get("business_date").strftime("%Y-%m-%d") if pd.notna(latest.get("business_date")) else "-"),
+            ("🛏️ Rooms sold", latest_rooms),
+            ("🔼 Rooms sold delta", format_delta_html(rooms_change, decimals=0)),
+            ("👤 Early DM", early_dm_display),
+            ("👤 Late DM", late_dm_display),
+            ("👤 Night DM", night_dm_display),
+        ]
+
+        commercial_items = [
+            ("📈 Occupancy", latest_occ_display),
+            ("🔼 Occupancy delta", format_delta_html(occupancy_change, suffix=" pp", decimals=1)),
+            ("💷 ADR", latest_adr_display),
+            ("🔼 ADR delta", format_delta_html(adr_change, prefix="£", decimals=2)),
+        ]
+
+        revenue_items = [
+            ("💰 Total revenue", latest_total_revenue),
+            ("🔼 Revenue delta", format_delta_html(revenue_change, prefix="£", decimals=2)),
+            ("✅ Validation status", validation_status_text),
+            ("📝 PASS count", str(pass_count)),
+        ]
+
+        summary_html = "<div class='summary-grid'>"
+        for title, items in [
+            ("Operations", operations_items),
+            ("Commercial", commercial_items),
+            ("Revenue & Validation", revenue_items),
+        ]:
+            summary_html += "<div class='summary-card'>"
+            summary_html += f"<div class='summary-card-title'>{title}</div>"
+            for label, value in items:
+                summary_html += (
+                    f"<div class='summary-row'><span class='summary-label'>{label}</span>"
+                    f"<span class='summary-value'>{value}</span></div>"
+                )
+            summary_html += "</div>"
+        summary_html += "</div>"
+        st.markdown(summary_html, unsafe_allow_html=True)
+
+        st.markdown("<div class='section-card'><div class='section-title'>Latest report details</div></div>", unsafe_allow_html=True)
+        latest_details = {
+            "Business Date": latest.get("business_date").strftime("%Y-%m-%d") if pd.notna(latest.get("business_date")) else "-",
+            "Early DM": early_dm_display,
+            "Late DM": late_dm_display,
+            "Night DM": night_dm_display,
+            "Rooms Sold": latest_rooms,
+            "Occupancy %": format_percent(latest.get("daily_occupancy") * 100) if pd.notna(latest.get("daily_occupancy")) else "-",
+            "ADR £": latest_adr_display,
+            "Total Revenue £": latest_total_revenue,
+            "Rooms Revenue £": format_currency(latest.get("revenue_stats_rooms_revenue")),
+            "Bar Revenue £": format_currency(latest.get("revenue_mtd_bar")),
+        }
+        st.table(pd.DataFrame([latest_details]))
+
+    with trends_tab:
+        st.markdown("<div class='section-card'><div class='section-title'>Trends</div></div>", unsafe_allow_html=True)
+        chart_cols = st.columns(2)
+
+        if "daily_rooms_sold" in df.columns:
+            fig_rooms = px.line(df, x="business_date", y="daily_rooms_sold", title="Daily Rooms Sold")
+            fig_rooms.update_layout(yaxis_title="Rooms Sold")
+            chart_cols[0].plotly_chart(fig_rooms, use_container_width=True)
+
+        if "daily_occupancy_pct" in df.columns:
+            fig_occ = px.line(df, x="business_date", y="daily_occupancy_pct", title="Daily Occupancy")
+            fig_occ.update_layout(yaxis_title="Occupancy (%)")
+            chart_cols[0].plotly_chart(fig_occ, use_container_width=True)
+
+        if "daily_average_rate" in df.columns:
+            fig_adr = px.line(df, x="business_date", y="daily_average_rate", title="Daily Average Rate")
+            fig_adr.update_layout(yaxis_title="ADR (£)")
+            chart_cols[1].plotly_chart(fig_adr, use_container_width=True)
+
+        if "revenue_mtd_total_revenue" in df.columns:
+            fig_rev = px.line(df, x="business_date", y="revenue_mtd_total_revenue", title="MTD Total Revenue")
+            fig_rev.update_layout(yaxis_title="Revenue (£)")
+            chart_cols[1].plotly_chart(fig_rev, use_container_width=True)
+
+    with validation_tab:
+        st.markdown("<div class='section-card'><div class='section-title'>Validation Summary</div></div>", unsafe_allow_html=True)
+        if validation_counts is not None:
+            status_html = "<div class='summary-grid'>"
+            status_html += "<div class='summary-card'>"
+            status_html += "<div class='summary-card-title'>Overall quality</div>"
+            status_html += f"<div class='summary-row'><span class='summary-label'>Validation status</span><span class='summary-value'>{validation_status_text}</span></div>"
+            status_html += "<div class='summary-row'><span class='summary-label'>PASS</span><span class='summary-value'>" + str(pass_count) + "</span></div>"
+            status_html += "<div class='summary-row'><span class='summary-label'>WARN</span><span class='summary-value'>" + str(warn_count) + "</span></div>"
+            status_html += "<div class='summary-row'><span class='summary-label'>FAIL</span><span class='summary-value'>" + str(fail_count) + "</span></div>"
+            status_html += "</div></div>"
+            st.markdown(status_html, unsafe_allow_html=True)
+
+            if fail_count == 0 and warn_count == 0:
+                st.success("All validation checks passed. No WARN or FAIL issues found.")
+            else:
+                st.markdown("<div class='section-card'><div class='section-title'>Warnings and Failures</div></div>", unsafe_allow_html=True)
+                problems = vdf[vdf["status"].isin(["WARN", "FAIL"])]
+                if not problems.empty:
+                    st.dataframe(problems[["business_date", "file_name", "check_name", "status", "message"]])
+                else:
+                    st.info("No WARN or FAIL issues found, but validation data is present.")
+        else:
+            st.info("Validation file not found. Run `python -m app.extractor` to produce validation results.")
+
+    with data_tab:
+        st.markdown("<div class='section-card'><div class='section-title'>Full data</div></div>", unsafe_allow_html=True)
+        preferred_columns = [
+            "business_date",
+            "early_dm_name",
+            "late_dm_name",
+            "night_dm_name",
+            "daily_rooms_sold",
+            "daily_occupancy",
+            "daily_average_rate",
+            "revenue_mtd_total_revenue",
+            "revenue_stats_rooms_revenue",
+            "revenue_mtd_bar",
+            "file_name",
+        ]
+        remaining_columns = [c for c in df.columns if c not in preferred_columns]
+        display_df = df[[c for c in preferred_columns if c in df.columns] + remaining_columns]
+        st.dataframe(display_df)
 
 
 if __name__ == "__main__":
