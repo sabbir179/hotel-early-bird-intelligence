@@ -37,6 +37,14 @@ def main() -> None:
     # Sidebar data controls
     with st.sidebar:
         st.header("Data controls")
+        
+        # Excel source folder path
+        folder_path = st.text_input(
+            "Excel source folder path",
+            value=str(RAW_DATA_DIR),
+            help="Path to folder containing Excel files"
+        )
+        
         uploaded_files = st.file_uploader(
             "Upload Early Bird Excel files",
             type=["xlsx"],
@@ -51,14 +59,21 @@ def main() -> None:
             st.info("After uploading, click Refresh data from Excel files.")
 
         if st.button("Refresh data from Excel files"):
-            with st.spinner("Refreshing data from Excel files..."):
-                try:
-                    summary = run_pipeline()
-                    st.success(f"Processed {summary['records_processed']} records")
-                    st.write("Validation status counts:")
-                    st.write(summary.get("validation_status_counts", {}))
-                except Exception as e:
-                    st.error(f"Refresh failed: {e}")
+            # Validate folder exists
+            selected_folder = Path(folder_path)
+            if not selected_folder.exists():
+                st.error(f"Folder does not exist: {folder_path}")
+            elif not selected_folder.is_dir():
+                st.error(f"Path is not a directory: {folder_path}")
+            else:
+                with st.spinner("Refreshing data from Excel files..."):
+                    try:
+                        summary = run_pipeline(raw_dir=selected_folder)
+                        st.success(f"Processed {summary['records_processed']} records")
+                        st.write("Validation status counts:")
+                        st.write(summary.get("validation_status_counts", {}))
+                    except Exception as e:
+                        st.error(f"Refresh failed: {e}")
 
     # Load data
     try:
