@@ -12,6 +12,7 @@ import plotly.express as px
 from app.config import RAW_DATA_DIR
 from app.database import load_daily_kpis
 from app.extractor import run_pipeline
+from app.report_generator import generate_powerpoint_report
 
 
 def format_currency(v):
@@ -74,6 +75,49 @@ def main() -> None:
                         st.write(summary.get("validation_status_counts", {}))
                     except Exception as e:
                         st.error(f"Refresh failed: {e}")
+
+        if st.button("Generate PowerPoint report"):
+            try:
+                # Load current KPI data
+                df = load_daily_kpis()
+                if df is None or df.empty:
+                    st.error("No data available. Please refresh data first.")
+                else:
+                    # Prepare data with derived columns
+                    if "business_date" in df.columns:
+                        df["business_date"] = pd.to_datetime(df["business_date"])
+                    df = df.sort_values("business_date").reset_index(drop=True)
+                    
+                    if "daily_occupancy" in df.columns:
+                        df["daily_occupancy_pct"] = pd.to_numeric(df["daily_occupancy"], errors="coerce") * 100
+                    
+                    # Load validation counts if available
+                    validation_counts = None
+                    val_path = Path("data") / "processed" / "early_bird_validation.csv"
+                    if val_path.exists():
+                        vdf = pd.read_csv(val_path)
+                        validation_counts = vdf["status"].value_counts().to_dict()
+                    
+                    # Generate PowerPoint
+                    with st.spinner("Generating PowerPoint report..."):
+                        report_path = generate_powerpoint_report(df, validation_counts=validation_counts)
+                    
+                    st.success(f"PowerPoint report created: {report_path.name}")
+                    st.info(f"Saved to: {report_path}")
+
+                    try:
+                        with open(report_path, "rb") as pptx_file:
+                            pptx_bytes = pptx_file.read()
+                        st.download_button(
+                            label="Download PowerPoint report",
+                            data=pptx_bytes,
+                            file_name=report_path.name,
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        )
+                    except Exception as e:
+                        st.error(f"Unable to prepare download file: {e}")
+            except Exception as e:
+                st.error(f"Failed to generate report: {e}")
 
     # Load data
     try:
