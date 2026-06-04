@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment files
+.env
+.env.*
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# macOS
+.DS_Store
+
+# Data and database files
+data/raw/*
+!data/raw/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+data/database/*
+!data/database/.gitkeep
+
+reports/pdf/*
+!reports/pdf/.gitkeep
+
+reports/powerpoint/*
+!reports/powerpoint/.gitkeep
+
+# SQLite and Excel files
+*.db
+*.sqlite
+*.sqlite3
+*.xlsx
+*.xlsm
+*.xls
